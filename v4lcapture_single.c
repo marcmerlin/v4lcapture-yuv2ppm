@@ -35,9 +35,7 @@ struct buffer {
 
 static char            *dev_name;
 static int              fd = -1;
-struct buffer          *buffers;
-static unsigned int     n_buffers;
-static int              frame_count = 1;
+struct buffer          buffer_;
 
 static void errno_exit(const char *s)
 {
@@ -60,9 +58,6 @@ static void process_image(const void *p, int size)
 {
 	fwrite(p, size, 1, stdout);
         fflush(stdout);
-
-        fprintf(stderr, ".");
-        fflush(stderr);
 }
 
 static int read_frame(void)
@@ -89,9 +84,7 @@ static int read_frame(void)
 		}
 	}
 
-	assert(buf.index < n_buffers);
-
-	process_image(buffers[buf.index].start, buf.bytesused);
+	process_image(buffer_.start, buf.bytesused);
 
 	if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
 		errno_exit("VIDIOC_QBUF");
@@ -100,41 +93,35 @@ static int read_frame(void)
 
 static void mainloop(void)
 {
-        unsigned int count;
+	for (;;) {
+		fd_set fds;
+		struct timeval tv;
+		int r;
 
-        count = frame_count;
+		FD_ZERO(&fds);
+		FD_SET(fd, &fds);
 
-        while (count-- > 0) {
-                for (;;) {
-                        fd_set fds;
-                        struct timeval tv;
-                        int r;
+		/* Timeout. */
+		tv.tv_sec = 2;
+		tv.tv_usec = 0;
 
-                        FD_ZERO(&fds);
-                        FD_SET(fd, &fds);
+		r = select(fd + 1, &fds, NULL, NULL, &tv);
 
-                        /* Timeout. */
-                        tv.tv_sec = 2;
-                        tv.tv_usec = 0;
+		if (-1 == r) {
+			if (EINTR == errno)
+				continue;
+			errno_exit("select");
+		}
 
-                        r = select(fd + 1, &fds, NULL, NULL, &tv);
+		if (0 == r) {
+			fprintf(stderr, "select timeout\n");
+			exit(EXIT_FAILURE);
+		}
 
-                        if (-1 == r) {
-                                if (EINTR == errno)
-                                        continue;
-                                errno_exit("select");
-                        }
-
-                        if (0 == r) {
-                                fprintf(stderr, "select timeout\n");
-                                exit(EXIT_FAILURE);
-                        }
-
-                        if (read_frame())
-                                break;
-                        /* EAGAIN - continue select loop. */
-                }
-        }
+		if (read_frame())
+			break;
+		/* EAGAIN - continue select loop. */
+	}
 }
 
 static void stop_capturing(void)
@@ -148,20 +135,17 @@ static void stop_capturing(void)
 
 static void start_capturing(void)
 {
-        unsigned int i;
         enum v4l2_buf_type type;
 
-	for (i = 0; i < n_buffers; ++i) {
-		struct v4l2_buffer buf;
+	struct v4l2_buffer buf;
 
-		CLEAR(buf);
-		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		buf.memory = V4L2_MEMORY_MMAP;
-		buf.index = i;
+	CLEAR(buf);
+	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.memory = V4L2_MEMORY_MMAP;
+	buf.index = 0;
 
-		if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
-			errno_exit("VIDIOC_QBUF");
-	}
+	if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
+		errno_exit("VIDIOC_QBUF");
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	if (-1 == xioctl(fd, VIDIOC_STREAMON, &type))
 		errno_exit("VIDIOC_STREAMON");
@@ -169,13 +153,7 @@ static void start_capturing(void)
 
 static void uninit_device(void)
 {
-        unsigned int i;
-
-	for (i = 0; i < n_buffers; ++i)
-		if (-1 == munmap(buffers[i].start, buffers[i].length))
-			errno_exit("munmap");
-
-        free(buffers);
+	if (-1 == munmap(buffer_.start, buffer_.length)) errno_exit("munmap");
 }
 
 static void init_mmap(void)
@@ -204,36 +182,26 @@ static void init_mmap(void)
                 exit(EXIT_FAILURE);
         }
 
-        buffers = calloc(req.count, sizeof(*buffers));
+	struct v4l2_buffer buf;
 
-        if (!buffers) {
-                fprintf(stderr, "Out of memory\n");
-                exit(EXIT_FAILURE);
-        }
+	CLEAR(buf);
 
-        for (n_buffers = 0; n_buffers < req.count; ++n_buffers) {
-                struct v4l2_buffer buf;
+	buf.type        = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.memory      = V4L2_MEMORY_MMAP;
+	buf.index       = 0;
 
-                CLEAR(buf);
+	if (-1 == xioctl(fd, VIDIOC_QUERYBUF, &buf))
+		errno_exit("VIDIOC_QUERYBUF");
 
-                buf.type        = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-                buf.memory      = V4L2_MEMORY_MMAP;
-                buf.index       = n_buffers;
+	buffer_.length = buf.length;
+	buffer_.start =
+		mmap(NULL /* start anywhere */,
+		      buf.length,
+		      PROT_READ | PROT_WRITE /* required */,
+		      MAP_SHARED /* recommended */,
+		      fd, buf.m.offset);
 
-                if (-1 == xioctl(fd, VIDIOC_QUERYBUF, &buf))
-                        errno_exit("VIDIOC_QUERYBUF");
-
-                buffers[n_buffers].length = buf.length;
-                buffers[n_buffers].start =
-                        mmap(NULL /* start anywhere */,
-                              buf.length,
-                              PROT_READ | PROT_WRITE /* required */,
-                              MAP_SHARED /* recommended */,
-                              fd, buf.m.offset);
-
-                if (MAP_FAILED == buffers[n_buffers].start)
-                        errno_exit("mmap");
-        }
+	if (MAP_FAILED == buffer_.start) errno_exit("mmap");
 }
 
 static void init_device(void)
@@ -357,9 +325,8 @@ static void usage(FILE *fp, int argc, char **argv)
                  "Options:\n"
                  "-d | --device name   Video device name [%s]\n"
                  "-h | --help          Print this message\n"
-                 "-c | --count         Number of frames to grab [%i]\n"
                  "",
-                 argv[0], dev_name, frame_count);
+                 argv[0], dev_name);
 }
 
 static const char short_options[] = "d:hmruofc:";
@@ -368,8 +335,7 @@ static const struct option
 long_options[] = {
         { "device", required_argument, NULL, 'd' },
         { "help",   no_argument,       NULL, 'h' },
-        { "count",  required_argument, NULL, 'c' },
-        { 0, 0, 0, 0 }
+        { }
 };
 
 int main(int argc, char **argv)
@@ -397,13 +363,6 @@ int main(int argc, char **argv)
                 case 'h':
                         usage(stdout, argc, argv);
                         exit(EXIT_SUCCESS);
-
-                case 'c':
-                        errno = 0;
-                        frame_count = strtol(optarg, NULL, 0);
-                        if (errno)
-                                errno_exit(optarg);
-                        break;
 
                 default:
                         usage(stderr, argc, argv);
