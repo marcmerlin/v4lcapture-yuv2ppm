@@ -3,11 +3,23 @@
 This is meant to capture output from a USB camera and output RGB24 (RGB888) output suitable for a dump framebuffer that uses this format, like Framebuffer::GFX
 
 Contains
-- v4lcapture_long.c is original from https://www.kernel.org/doc/html/v4.11/media/uapi/v4l/capture.c.html
+- v4lcapture_long.c is original from https://www.kernel.org/doc/html/v4.11/media/uapi/v4l/capture.c.html . It outputs mjpeg by default.
 - v4lcapture.c is the short version that outputs YUYV' (YUYV 4:2:2) from a USB camera to stdout (run with -c 1 to ouput a single frame that you can feed to yuv2ppm)
+- v4lcapture_single.c is further simplified and just outputs a single frame on stdout
 - yuv2ppm supports both YUV422 (per the original code I found on archive.org) and 'YUYV' (YUYV 4:2:2) which is needed to process the USB camera output. Outputs a PPM in binary or ASCII form)
 
 Code is hardcoded for 320x240 which is the smallest size allowed by my USB camera
+
+Example usage:
+```
+./v4lcapture_single -d /dev/video4 > out.yuv
+./yuv2ppm out.yuv
+
+or
+./v4lcapture -c 100 > out.yuv
+mplayer -demuxer rawvideo -rawvideo w=320:h=240:format=yuy2 out.yuv
+```
+
 
 ```
 sauron:~$ v4l2-ctl -d /dev/video4 --list-formats-ext
@@ -23,9 +35,6 @@ sauron:~$ v4l2-ctl -d /dev/video4 --list-formats-ext
 			Interval: Discrete 0.033s (30.000 fps)
 ```
 
-You can play multiple frame output (v4lcapture -c 100 > out) with
-```
-mplayer -demuxer rawvideo -rawvideo w=320:h=240:format=yuy2 out
 ```
 
 Suggested reading/resources:

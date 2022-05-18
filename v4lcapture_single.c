@@ -29,13 +29,23 @@
 #define CLEAR(x) memset(&(x), 0, sizeof(x))
 
 struct buffer {
-        void   *start;
+        char   *start;
         size_t  length;
 };
 
-static char            *dev_name;
+const char            *dev_name = "/dev/video0";
 static int              fd = -1;
 struct buffer          buffer_;
+
+// Compat with arduino C++
+#ifndef ARDUINO
+#define uint8_t u_int8_t
+#define uint16_t u_int16_t
+#define uint32_t u_int32_t
+#endif
+
+uint16_t CAPTURE_W = 320;
+uint16_t CAPTURE_H = 240;
 
 static void errno_exit(const char *s)
 {
@@ -56,8 +66,10 @@ static int xioctl(int fh, int request, void *arg)
 
 static void process_image(const void *p, int size)
 {
+#ifndef V4LCAPTURE_INCLUDE
 	fwrite(p, size, 1, stdout);
         fflush(stdout);
+#endif
 }
 
 static int read_frame(void)
@@ -124,15 +136,6 @@ static void mainloop(void)
 	}
 }
 
-static void stop_capturing(void)
-{
-        enum v4l2_buf_type type;
-
-	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (-1 == xioctl(fd, VIDIOC_STREAMOFF, &type))
-		errno_exit("VIDIOC_STREAMOFF");
-}
-
 static void start_capturing(void)
 {
         enum v4l2_buf_type type;
@@ -149,11 +152,6 @@ static void start_capturing(void)
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	if (-1 == xioctl(fd, VIDIOC_STREAMON, &type))
 		errno_exit("VIDIOC_STREAMON");
-}
-
-static void uninit_device(void)
-{
-	if (-1 == munmap(buffer_.start, buffer_.length)) errno_exit("munmap");
 }
 
 static void init_mmap(void)
@@ -194,7 +192,7 @@ static void init_mmap(void)
 		errno_exit("VIDIOC_QUERYBUF");
 
 	buffer_.length = buf.length;
-	buffer_.start =
+	buffer_.start = (char *)
 		mmap(NULL /* start anywhere */,
 		      buf.length,
 		      PROT_READ | PROT_WRITE /* required */,
@@ -264,8 +262,8 @@ static void init_device(void)
         CLEAR(fmt);
 
         fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	fmt.fmt.pix.width       = 320;
-	fmt.fmt.pix.height      = 240;
+	fmt.fmt.pix.width       = CAPTURE_W;
+	fmt.fmt.pix.height      = CAPTURE_H;
 	fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
 	//fmt.fmt.pix.field       = V4L2_FIELD_INTERLACED;
 
@@ -283,14 +281,6 @@ static void init_device(void)
                 fmt.fmt.pix.sizeimage = min;
 
 	init_mmap();
-}
-
-static void close_device(void)
-{
-        if (-1 == close(fd))
-                errno_exit("close");
-
-        fd = -1;
 }
 
 static void open_device(void)
@@ -315,6 +305,29 @@ static void open_device(void)
                          dev_name, errno, strerror(errno));
                 exit(EXIT_FAILURE);
         }
+}
+
+#ifndef V4LCAPTURE_INCLUDE
+static void stop_capturing(void)
+{
+        enum v4l2_buf_type type;
+
+	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (-1 == xioctl(fd, VIDIOC_STREAMOFF, &type))
+		errno_exit("VIDIOC_STREAMOFF");
+}
+
+static void uninit_device(void)
+{
+	if (-1 == munmap(buffer_.start, buffer_.length)) errno_exit("munmap");
+}
+
+static void close_device(void)
+{
+        if (-1 == close(fd))
+                errno_exit("close");
+
+        fd = -1;
 }
 
 static void usage(FILE *fp, int argc, char **argv)
@@ -380,4 +393,5 @@ int main(int argc, char **argv)
         fprintf(stderr, "\n");
         return 0;
 }
-#endif
+#endif // V4LCAPTURE_INCLUDE
+#endif // __linux__
