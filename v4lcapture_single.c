@@ -47,10 +47,17 @@ struct buffer          buffer_;
 uint16_t CAPTURE_W = 320;
 uint16_t CAPTURE_H = 240;
 
-static void errno_exit(const char *s)
+static void exit_(int val) {
+// In production, don't exit when camera is missing
+#ifndef ARDUINOONPC
+    exit(val);
+#endif
+}
+
+static void errno_exit_(const char *s)
 {
         fprintf(stderr, "%s error %d, %s\n", s, errno, strerror(errno));
-        exit(EXIT_FAILURE);
+        exit_(EXIT_FAILURE);
 }
 
 static int xioctl(int fh, int request, void *arg)
@@ -92,14 +99,14 @@ static int read_frame(void)
 			/* fall through */
 
 		default:
-			errno_exit("VIDIOC_DQBUF");
+			errno_exit_("VIDIOC_DQBUF");
 		}
 	}
 
 	process_image(buffer_.start, buf.bytesused);
 
 	if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
-		errno_exit("VIDIOC_QBUF");
+		errno_exit_("VIDIOC_QBUF");
         return 1;
 }
 
@@ -122,12 +129,12 @@ static void mainloop(void)
 		if (-1 == r) {
 			if (EINTR == errno)
 				continue;
-			errno_exit("select");
+			errno_exit_("select");
 		}
 
 		if (0 == r) {
 			fprintf(stderr, "select timeout\n");
-			exit(EXIT_FAILURE);
+			exit_(EXIT_FAILURE);
 		}
 
 		if (read_frame())
@@ -148,10 +155,10 @@ static void start_capturing(void)
 	buf.index = 0;
 
 	if (-1 == xioctl(fd, VIDIOC_QBUF, &buf))
-		errno_exit("VIDIOC_QBUF");
+		errno_exit_("VIDIOC_QBUF");
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	if (-1 == xioctl(fd, VIDIOC_STREAMON, &type))
-		errno_exit("VIDIOC_STREAMON");
+		errno_exit_("VIDIOC_STREAMON");
 }
 
 static void init_mmap(void)
@@ -168,16 +175,16 @@ static void init_mmap(void)
                 if (EINVAL == errno) {
                         fprintf(stderr, "%s does not support "
                                  "memory mappingn", dev_name);
-                        exit(EXIT_FAILURE);
+                        exit_(EXIT_FAILURE);
                 } else {
-                        errno_exit("VIDIOC_REQBUFS");
+                        errno_exit_("VIDIOC_REQBUFS");
                 }
         }
 
         if (req.count < 2) {
                 fprintf(stderr, "Insufficient buffer memory on %s\n",
                          dev_name);
-                exit(EXIT_FAILURE);
+                exit_(EXIT_FAILURE);
         }
 
 	struct v4l2_buffer buf;
@@ -189,7 +196,7 @@ static void init_mmap(void)
 	buf.index       = 0;
 
 	if (-1 == xioctl(fd, VIDIOC_QUERYBUF, &buf))
-		errno_exit("VIDIOC_QUERYBUF");
+		errno_exit_("VIDIOC_QUERYBUF");
 
 	buffer_.length = buf.length;
 	buffer_.start = (char *)
@@ -199,7 +206,7 @@ static void init_mmap(void)
 		      MAP_SHARED /* recommended */,
 		      fd, buf.m.offset);
 
-	if (MAP_FAILED == buffer_.start) errno_exit("mmap");
+	if (MAP_FAILED == buffer_.start) errno_exit_("mmap");
 }
 
 static void init_device(void)
@@ -214,22 +221,22 @@ static void init_device(void)
                 if (EINVAL == errno) {
                         fprintf(stderr, "%s is no V4L2 device\n",
                                  dev_name);
-                        exit(EXIT_FAILURE);
+                        exit_(EXIT_FAILURE);
                 } else {
-                        errno_exit("VIDIOC_QUERYCAP");
+                        errno_exit_("VIDIOC_QUERYCAP");
                 }
         }
 
         if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
                 fprintf(stderr, "%s is no video capture device\n",
                          dev_name);
-                exit(EXIT_FAILURE);
+                exit_(EXIT_FAILURE);
         }
 
 	if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
 		fprintf(stderr, "%s does not support streaming i/o\n",
 			 dev_name);
-		exit(EXIT_FAILURE);
+		exit_(EXIT_FAILURE);
 	}
 
 
@@ -268,7 +275,7 @@ static void init_device(void)
 	//fmt.fmt.pix.field       = V4L2_FIELD_INTERLACED;
 
 	if (-1 == xioctl(fd, VIDIOC_S_FMT, &fmt))
-		errno_exit("VIDIOC_S_FMT");
+		errno_exit_("VIDIOC_S_FMT");
 
 	/* Note VIDIOC_S_FMT may change width and height. */
 
@@ -290,12 +297,12 @@ static void open_device(void)
         if (-1 == stat(dev_name, &st)) {
                 fprintf(stderr, "Cannot identify '%s': %d, %s\n",
                          dev_name, errno, strerror(errno));
-                exit(EXIT_FAILURE);
+                exit_(EXIT_FAILURE);
         }
 
         if (!S_ISCHR(st.st_mode)) {
-                fprintf(stderr, "%s is no devicen", dev_name);
-                exit(EXIT_FAILURE);
+                fprintf(stderr, "%s is no device\n", dev_name);
+                exit_(EXIT_FAILURE);
         }
 
         fd = open(dev_name, O_RDWR /* required */ | O_NONBLOCK, 0);
@@ -303,29 +310,30 @@ static void open_device(void)
         if (-1 == fd) {
                 fprintf(stderr, "Cannot open '%s': %d, %s\n",
                          dev_name, errno, strerror(errno));
-                exit(EXIT_FAILURE);
+                exit_(EXIT_FAILURE);
         }
 }
 
 #ifndef V4LCAPTURE_INCLUDE
+
 static void stop_capturing(void)
 {
         enum v4l2_buf_type type;
 
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	if (-1 == xioctl(fd, VIDIOC_STREAMOFF, &type))
-		errno_exit("VIDIOC_STREAMOFF");
+		errno_exit_("VIDIOC_STREAMOFF");
 }
 
 static void uninit_device(void)
 {
-	if (-1 == munmap(buffer_.start, buffer_.length)) errno_exit("munmap");
+	if (-1 == munmap(buffer_.start, buffer_.length)) errno_exit_("munmap");
 }
 
 static void close_device(void)
 {
         if (-1 == close(fd))
-                errno_exit("close");
+                errno_exit_("close");
 
         fd = -1;
 }
@@ -375,11 +383,11 @@ int main(int argc, char **argv)
 
                 case 'h':
                         usage(stdout, argc, argv);
-                        exit(EXIT_SUCCESS);
+                        exit_(EXIT_SUCCESS);
 
                 default:
                         usage(stderr, argc, argv);
-                        exit(EXIT_FAILURE);
+                        exit_(EXIT_FAILURE);
                 }
         }
 
