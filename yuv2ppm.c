@@ -90,7 +90,7 @@ void yuv2rgb(uint8_t y, uint8_t u, uint8_t v, uint8_t *r, uint8_t *g, uint8_t *b
    if (R < 0) R = 0;
    if (G < 0) G = 0;
    if (B < 0) B = 0;
-   // Values only go from 0-220..  Why?
+   // bring down brightness a bit, but this adds more math (slowdown)
    *r = R * 220 / 256;
    *g = G * 220 / 256;
    *b = B * 220 / 256;
