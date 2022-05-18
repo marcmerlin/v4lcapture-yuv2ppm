@@ -14,6 +14,7 @@ Example usage:
 ```
 ./v4lcapture_single -d /dev/video4 > out.yuv
 ./yuv2ppm out.yuv
+gthumb out.yuv.ppm
 
 or
 ./v4lcapture -c 100 > out.yuv
@@ -21,7 +22,7 @@ mplayer -demuxer rawvideo -rawvideo w=320:h=240:format=yuy2 out.yuv
 ```
 
 
-```
+```0
 sauron:~$ v4l2-ctl -d /dev/video4 --list-formats-ext
 (...)
 	[1]: 'YUYV' (YUYV 4:2:2)
@@ -33,8 +34,6 @@ sauron:~$ v4l2-ctl -d /dev/video4 --list-formats-ext
 		Size: Discrete 640x480
 			Interval: Discrete 0.033s (30.000 fps)
 			Interval: Discrete 0.033s (30.000 fps)
-```
-
 ```
 
 Suggested reading/resources:
