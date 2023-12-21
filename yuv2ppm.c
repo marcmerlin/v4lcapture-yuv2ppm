@@ -50,20 +50,20 @@ uint8_t ALGO = 3;
 int make_outfile(char *outfile, char *infile)
 {
    int i;
-   
+
    for(i=0; infile[i]; i++) outfile[i] = infile[i];
    outfile[i++] = '.';
    outfile[i++] = 'p';
    outfile[i++] = 'p';
    outfile[i++] = 'm';
    outfile[i++] = 0;
-   
+
    return 0;
 }
 void yuv2rgb(uint8_t y, uint8_t u, uint8_t v, uint8_t *r, uint8_t *g, uint8_t *b)
 {
    int16_t R, G, B;
-   
+
    if (ALGO == 1) {
      R = 1.164 * (y - 16) +                     2.018 * (v - 128);
      G = 1.164 * (y - 16) - 0.813 * (u - 128) - 0.391 * (v - 128);
@@ -101,7 +101,7 @@ void yuv2rgb(uint8_t y, uint8_t u, uint8_t v, uint8_t *r, uint8_t *g, uint8_t *b
 
    if (VERBOSE)
       printf("yuv2rgb(%2x, %2x, %2x) -> %2x, %2x, %2x\n", y, u, v, *r, *g, *b);
-   
+
    return;
 }
 
@@ -139,7 +139,7 @@ int yuv2ppm(char *infile, char *outfile)
       	printf("Unknown YUV format\n");
           exit(-1);
       }
-      
+
       if (VERBOSE)
          printf("u:%2x y:%2x v:%2x y2:%2x\n", u, y, v, y2);
 
