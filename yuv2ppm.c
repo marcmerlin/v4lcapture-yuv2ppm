@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 
 // Need to convert YUV422 to RGB24
 // The YUV422 data format shares U and V values between two pixels. As a result, these values are transmitted to the PC image buffer only once for every two pixels, resulting in an average transmission rate of 16 bits per pixel.
@@ -31,10 +32,6 @@ P3
 
 // PPM can be binary or ASCII, define BINOUTPUT
 // define BINOUTPUT
-
-// Compat with arduino C++
-#define uint8_t u_int8_t 
-#define uint16_t u_int16_t 
 
 uint16_t IMAGE_W = 320;
 uint16_t IMAGE_H = 240;
