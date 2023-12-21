@@ -33,8 +33,8 @@ P3
 // PPM can be binary or ASCII, define BINOUTPUT
 // define BINOUTPUT
 
-uint16_t IMAGE_W = 320;
-uint16_t IMAGE_H = 240;
+uint16_t IMAGE_W = 1920;
+uint16_t IMAGE_H = 1080;
 
 int make_outfile(char *outfile, char *infile)
 {
