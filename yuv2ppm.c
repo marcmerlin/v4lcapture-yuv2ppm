@@ -162,9 +162,8 @@ int yuv2ppm(char *infile, char *outfile)
       if (VERBOSE)
          printf("u:%2x y:%2x v:%2x y2:%2x\n", u, y, v, y2);
 
-      yuv2rgb(y, u, v, &r, &g, &b);
-
       if (BINOUTPUT) {
+        yuv2rgb(y, u, v, &r, &g, &b);
         fwrite(&r, 1, 1, out);
         fwrite(&g, 1, 1, out);
         fwrite(&b, 1, 1, out);
@@ -173,7 +172,9 @@ int yuv2ppm(char *infile, char *outfile)
         fwrite(&g, 1, 1, out);
         fwrite(&b, 1, 1, out);
       } else {
+        yuv2rgb(y, u, v, &r, &g, &b);
         fprintf(out, "%u %u %u\n", r, g, b);
+        yuv2rgb(y2, u, v, &r, &g, &b);
         fprintf(out, "%u %u %u\n", r, g, b);
       }
    }
