@@ -45,7 +45,7 @@ bool VERBOSE = false;
 uint16_t IMAGE_W = 1920;
 uint16_t IMAGE_H = 1080;
 
-uint8_t ALGO = 3;
+uint8_t ALGO = 5;
 
 int make_outfile(char *outfile, char *infile)
 {
@@ -60,28 +60,41 @@ int make_outfile(char *outfile, char *infile)
 
    return 0;
 }
-void yuv2rgb(uint8_t y, uint8_t u, uint8_t v, uint8_t *r, uint8_t *g, uint8_t *b)
+
+void yuv2rgb(double y, double u, double v, uint8_t *r, uint8_t *g, uint8_t *b)
 {
-   int16_t R, G, B;
+   double R, G, B;
 
    if (ALGO == 1) {
+     // This is actually an YCbCr conversion. Not suitable for YUV.
      R = 1.164 * (y - 16) +                     2.018 * (v - 128);
      G = 1.164 * (y - 16) - 0.813 * (u - 128) - 0.391 * (v - 128);
      B = 1.164 * (y - 16) + 1.596 * (u - 128);
    } else if (ALGO == 2) {
-     R = 1.164 * (y - 16)			    + 1.596 * (v - 128);
+     // This is actually an YCbCr conversion. Not suitable for YUV.
+     R = 1.164 * (y - 16)	                   + 1.596 * (v - 128);
      G = 1.164 * (y - 16) - 0.391 * (u - 128) - 0.813 * (v - 128);
      B = 1.164 * (y - 16) + 2.018 * (u - 128);
    } else if (ALGO == 3) {
      // This seems to have the least amount of math and display is ok
-     R = y				    + 1.370705 * (v-128);
-     G = y		- 0.337633 * (u-128)- 0.698001 * (v-128) ;
-     B = y		+ 1.732446 * (u-128);
+     R = y	                     + 1.370705 * (v-128);
+     G = y	- 0.337633 * (u-128) - 0.698001 * (v-128);
+     B = y	+ 1.732446 * (u-128);
    } else if (ALGO == 4) {
      // This looks short but the colors are wrong
      R = y + 1.403 * v;
      G = y - 0.344 * u - 0.714 * v;
      B = y + 1.770 * u;
+   } else if (ALGO == 5) {
+     // HDTV values taken from wikipedia (BT.709)
+     R = y	                    + 1.28033 * (v-128);
+     G = y	- 0.21482 * (u-128) - 0.38059 * (v-128);
+     B = y	+ 2.12798 * (u-128);
+   } else if (ALGO == 6) {
+     // SDTV values taken from wikipedia (BT.470)
+     R = y	                    + 1.13982 * (v-128);
+     G = y	- 0.39465 * (u-128) - 0.58060 * (v-128);
+     B = y	+ 2.03211 * (u-128);
    } else {
      printf("Invalid algorithm.\n");
      exit(-1);
@@ -94,13 +107,13 @@ void yuv2rgb(uint8_t y, uint8_t u, uint8_t v, uint8_t *r, uint8_t *g, uint8_t *b
    if (R < 0) R = 0;
    if (G < 0) G = 0;
    if (B < 0) B = 0;
-   // bring down brightness a bit, but this adds more math (slowdown)
-   *r = R * 220 / 256;
-   *g = G * 220 / 256;
-   *b = B * 220 / 256;
+
+   *r = (uint8_t)R;
+   *g = (uint8_t)G;
+   *b = (uint8_t)B;
 
    if (VERBOSE)
-      printf("yuv2rgb(%2x, %2x, %2x) -> %2x, %2x, %2x\n", y, u, v, *r, *g, *b);
+      printf("yuv2rgb(%2f, %2f, %2f) -> %2x, %2x, %2x\n", y, u, v, *r, *g, *b);
 
    return;
 }
