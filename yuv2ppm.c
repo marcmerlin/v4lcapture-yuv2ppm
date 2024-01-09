@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <ctype.h>
 #include <getopt.h>
 #include <stdbool.h>
@@ -145,12 +146,22 @@ void yuv2rgb(double y, double u, double v, rgbdata_t *out)
 
 static int write_raw(rgbdata_t *data, FILE *outfile)
 {
-   return fwrite(data, 3, 3, outfile);
+   int ret = fwrite(data, 3, 3, outfile);
+   if (ret < 0) {
+      fprintf(stderr, "Error writing output file: %i (%s)\n", ret, strerror(ret));
+      exit(-1);
+   }
+   return ret;
 }
 
 static int write_ascii(rgbdata_t *data, FILE *outfile)
 {
-   return fprintf(outfile, "%u %u %u\n", data->r, data->g, data->b);
+   int ret = fprintf(outfile, "%u %u %u\n", data->r, data->g, data->b);
+   if (ret < 0) {
+      fprintf(stderr, "Error writing output file: %i (%s)\n", ret, strerror(ret));
+      exit(-1);
+   }
+   return ret;
 }
 
 int yuv2ppm(char *infile, char *outfile)
