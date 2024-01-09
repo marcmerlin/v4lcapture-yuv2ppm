@@ -122,8 +122,8 @@ void yuv2rgb(double y, double u, double v, rgbdata_t *out)
      G = y	- 0.39465 * (u-128) - 0.58060 * (v-128);
      B = y	+ 2.03211 * (u-128);
    } else {
-     printf("Invalid algorithm.\n");
-     exit(-1);
+      printf("Invalid algorithm.\n");
+      exit(-1);
    }
 
    // Even with proper conversion, some values still need clipping.
@@ -236,73 +236,73 @@ void print_help()
 
 int main(int argc, char **argv)
 {
-  char *infile, outfile[512];
-  int i, c, success;
+   char *infile, outfile[512];
+   int i, c, success;
 
-  opterr = 0;
+   opterr = 0;
 
-  while ((c = getopt(argc, argv, "va:bH:W:h")) != -1) {
-     switch (c) {
-     case 'h':
-        print_help();
-        exit(0);
-        break;
-     case 'b':
-        BINOUTPUT = true;
-        break;
-     case 'v':
-        VERBOSE = true;
-        break;
-     case 'a':
-        ALGO = atoi(optarg);
-        break;
-     case 'H':
-        IMAGE_H = atoi(optarg);
-        break;
-     case 'W':
-        IMAGE_W = atoi(optarg);
-        break;
-     case '?':
-        if (optopt == 'W' || optopt == 'H')
-           fprintf(stderr, "Option -%c requires an argument.\n", optopt);
-        else if (isprint(optopt))
-           fprintf(stderr, "Unknown option `-%c'.\n", optopt);
-        else
-           fprintf(stderr,
-                    "Unknown option character `\\x%x'.\n",
-                    optopt);
-        return 1;
-     default:
-        exit(0);
-     }
-  }
+   while ((c = getopt(argc, argv, "va:bH:W:h")) != -1) {
+      switch (c) {
+      case 'h':
+         print_help();
+         exit(0);
+         break;
+      case 'b':
+         BINOUTPUT = true;
+         break;
+      case 'v':
+         VERBOSE = true;
+         break;
+      case 'a':
+         ALGO = atoi(optarg);
+         break;
+      case 'H':
+         IMAGE_H = atoi(optarg);
+         break;
+      case 'W':
+         IMAGE_W = atoi(optarg);
+         break;
+      case '?':
+         if (optopt == 'W' || optopt == 'H')
+            fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+         else if (isprint(optopt))
+            fprintf(stderr, "Unknown option `-%c'.\n", optopt);
+         else
+            fprintf(stderr,
+                     "Unknown option character `\\x%x'.\n",
+                     optopt);
+         return 1;
+      default:
+         exit(0);
+      }
+   }
 
 
-  for(i=optind; i<argc; i++)
-  {
-     success = 0;
-     infile = argv[i];
+   for(i=optind; i<argc; i++)
+   {
+      success = 0;
+      infile = argv[i];
 
-     if (strnlen(infile, sizeof(outfile)) > sizeof(outfile)-5) {
-       fprintf(stderr, "Error: Input filename too long: %s\n", infile);
-       exit(-1);
-     }
+      if (strnlen(infile, sizeof(outfile)) > sizeof(outfile)-5) {
+         fprintf(stderr, "Error: Input filename too long: %s\n", infile);
+         exit(-1);
+      }
 
-     make_outfile(outfile, infile);
+      make_outfile(outfile, infile);
 
-     printf("%s -> %s\n", infile, outfile);
-     fflush(stdout);
-     success = yuv2ppm(infile, outfile);
+      printf("%s -> %s\n", infile, outfile);
+      fflush(stdout);
+      success = yuv2ppm(infile, outfile);
 
-     if(success)
-     {
-       printf("Done.\n");
-     }
-     else
-     {
-       printf("Failed.  Aborting.\n");
-       return 1;
-     }
-  }
-  return 0;
+      if(success)
+      {
+         printf("Done.\n");
+      }
+      else
+      {
+         printf("Failed.  Aborting.\n");
+         return 1;
+      }
+   }
+   return 0;
 }
