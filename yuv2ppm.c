@@ -236,7 +236,7 @@ void print_help()
 
 int main(int argc, char **argv)
 {
-  char *infile, outfile[256];
+  char *infile, outfile[512];
   int i, c, success;
 
   opterr = 0;
@@ -282,6 +282,12 @@ int main(int argc, char **argv)
   {
      success = 0;
      infile = argv[i];
+
+     if (strnlen(infile, sizeof(outfile)) > sizeof(outfile)-5) {
+       fprintf(stderr, "Error: Input filename too long: %s\n", infile);
+       exit(-1);
+     }
+
      make_outfile(outfile, infile);
 
      printf("%s -> %s\n", infile, outfile);
