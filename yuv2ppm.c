@@ -1,5 +1,10 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <ctype.h>
+#include <getopt.h>
+#include <stdbool.h>
 
 // Need to convert YUV422 to RGB24
 // The YUV422 data format shares U and V values between two pixels. As a result, these values are transmitted to the PC image buffer only once for every two pixels, resulting in an average transmission rate of 16 bits per pixel.
@@ -10,9 +15,39 @@
 // But my USB camera outputs 'YUYV' (YUYV 4:2:2) which is indeed Y U Y2 V
 // YUY2: "Known as YUY2, YUYV, V422 or YUNV"
 // https://stackoverflow.com/questions/36228232/yuy2-vs-yuv-422
-#define YUYV
+// #define YUYV
 
-#define ALGO 3
+typedef enum YUVFORMAT {
+	YUV422,
+	YUYV
+} yuvformat_t;
+
+typedef union YUYVDATA {
+   // called YUY2 in mplayer, mplayer -demuxer rawvideo -rawvideo w=320:h=240:format=yuy2 out.yuyv
+   struct {
+      uint8_t y;
+      uint8_t u;
+      uint8_t y2;
+      uint8_t v;
+   } yuyv;
+   // https://www.flir.com/support-center/iis/machine-vision/knowledge-base/understanding-yuv-data-formats/#:~:text=The%20YUV422%20data%20format%20shares,V2%20Y3%20U4%20Y4%20V4%E2%80%A6
+   // U0 Y0 V0 Y1 U2 Y2 V2 Y3
+   struct {
+      uint8_t u;
+      uint8_t y;
+      uint8_t v;
+      uint8_t y2;
+   } yuv442;
+   uint8_t raw[4];
+} yuvdata_t;
+
+typedef struct RGBDATA {
+   uint8_t r;
+   uint8_t g;
+   uint8_t b;
+} rgbdata_t;
+
+yuvformat_t FORMAT = YUYV;
 
 /*
   Compile thusly:
@@ -29,59 +64,67 @@ P3
 15  0 15    0  0  0    0  0  0    0  0  0
 */
 
-// PPM can be binary or ASCII, define BINOUTPUT
-// define BINOUTPUT
+// PPM can be binary or ASCII
+bool BINOUTPUT = false;
+bool VERBOSE = false;
 
-// Compat with arduino C++
-#define uint8_t u_int8_t 
-#define uint16_t u_int16_t 
+uint16_t IMAGE_W = 1920;
+uint16_t IMAGE_H = 1080;
 
-uint16_t IMAGE_W = 320;
-uint16_t IMAGE_H = 240;
+uint8_t ALGO = 5;
 
 int make_outfile(char *outfile, char *infile)
 {
    int i;
-   
+
    for(i=0; infile[i]; i++) outfile[i] = infile[i];
    outfile[i++] = '.';
    outfile[i++] = 'p';
    outfile[i++] = 'p';
    outfile[i++] = 'm';
    outfile[i++] = 0;
-   
+
    return 0;
 }
-void yuv2rgb(uint8_t y, uint8_t u, uint8_t v, uint8_t *r, uint8_t *g, uint8_t *b)
-{
-   int16_t R, G, B;
-   
-#if ALGO == 1
-   #pragma message "Algorithm 1"
-   R = 1.164 * (y - 16) +                     2.018 * (v - 128);
-   G = 1.164 * (y - 16) - 0.813 * (u - 128) - 0.391 * (v - 128);
-   B = 1.164 * (y - 16) + 1.596 * (u - 128);
 
-#elif ALGO == 2
-   #pragma message "Algorithm 2"
-   R = 1.164 * (y - 16)			    + 1.596 * (v - 128);
-   G = 1.164 * (y - 16) - 0.391 * (u - 128) - 0.813 * (v - 128);
-   B = 1.164 * (y - 16) + 2.018 * (u - 128);
-   
-#elif ALGO == 3
-   // This seems to have the least amount of math and display is ok
-   #pragma message "Algorithm 3"
-   R = y				    + 1.370705 * (v-128);
-   G = y		- 0.337633 * (u-128)- 0.698001 * (v-128) ;
-   B = y		+ 1.732446 * (u-128);
-   
-#elif ALGO == 4
-   // This looks short but the colors are wrong
-   #pragma message "Algorithm 4"
-   R = y + 1.403 * v;
-   G = y - 0.344 * u - 0.714 * v;
-   B = y + 1.770 * u;
-#endif
+void yuv2rgb(double y, double u, double v, rgbdata_t *out)
+{
+   double R, G, B;
+
+   if (ALGO == 1) {
+     // This is actually an YCbCr conversion. Not suitable for YUV.
+     R = 1.164 * (y - 16) +                     2.018 * (v - 128);
+     G = 1.164 * (y - 16) - 0.813 * (u - 128) - 0.391 * (v - 128);
+     B = 1.164 * (y - 16) + 1.596 * (u - 128);
+   } else if (ALGO == 2) {
+     // This is actually an YCbCr conversion. Not suitable for YUV.
+     R = 1.164 * (y - 16)	                   + 1.596 * (v - 128);
+     G = 1.164 * (y - 16) - 0.391 * (u - 128) - 0.813 * (v - 128);
+     B = 1.164 * (y - 16) + 2.018 * (u - 128);
+   } else if (ALGO == 3) {
+     // This seems to have the least amount of math and display is ok
+     R = y	                     + 1.370705 * (v-128);
+     G = y	- 0.337633 * (u-128) - 0.698001 * (v-128);
+     B = y	+ 1.732446 * (u-128);
+   } else if (ALGO == 4) {
+     // This looks short but the colors are wrong
+     R = y + 1.403 * v;
+     G = y - 0.344 * u - 0.714 * v;
+     B = y + 1.770 * u;
+   } else if (ALGO == 5) {
+     // HDTV values taken from wikipedia (BT.709)
+     R = y	                    + 1.28033 * (v-128);
+     G = y	- 0.21482 * (u-128) - 0.38059 * (v-128);
+     B = y	+ 2.12798 * (u-128);
+   } else if (ALGO == 6) {
+     // SDTV values taken from wikipedia (BT.470)
+     R = y	                    + 1.13982 * (v-128);
+     G = y	- 0.39465 * (u-128) - 0.58060 * (v-128);
+     B = y	+ 2.03211 * (u-128);
+   } else {
+      printf("Invalid algorithm.\n");
+      exit(-1);
+   }
 
    // Even with proper conversion, some values still need clipping.
    if (R > 255) R = 255;
@@ -90,100 +133,176 @@ void yuv2rgb(uint8_t y, uint8_t u, uint8_t v, uint8_t *r, uint8_t *g, uint8_t *b
    if (R < 0) R = 0;
    if (G < 0) G = 0;
    if (B < 0) B = 0;
-   // bring down brightness a bit, but this adds more math (slowdown)
-   *r = R * 220 / 256;
-   *g = G * 220 / 256;
-   *b = B * 220 / 256;
-   // printf("yuv2rgb(%2x, %2x, %2x) -> %2x, %2x, %2x\n", y, u, v, *r, *g, *b);
-   
+
+   out->r = (uint8_t)R;
+   out->g = (uint8_t)G;
+   out->b = (uint8_t)B;
+
+   if (VERBOSE)
+      printf("yuv2rgb(%2f, %2f, %2f) -> %2x, %2x, %2x\n", y, u, v, out->r, out->g, out->b);
+
    return;
 }
+
+static int write_raw(rgbdata_t *data, FILE *outfile)
+{
+   int ret = fwrite(data, 3, 3, outfile);
+   if (ret < 0) {
+      fprintf(stderr, "Error writing output file: %i (%s)\n", ret, strerror(ret));
+      exit(-1);
+   }
+   return ret;
+}
+
+static int write_ascii(rgbdata_t *data, FILE *outfile)
+{
+   int ret = fprintf(outfile, "%u %u %u\n", data->r, data->g, data->b);
+   if (ret < 0) {
+      fprintf(stderr, "Error writing output file: %i (%s)\n", ret, strerror(ret));
+      exit(-1);
+   }
+   return ret;
+}
+
 int yuv2ppm(char *infile, char *outfile)
 {
    FILE *in, *out;
-   uint8_t y, u, v, y2;
-   uint8_t r, g, b;
-   
-#ifdef BINOUTPUT
-   char *ppmheader = "P6\n# Generated by yuv2ppm\n";
-#else
-   char *ppmheader = "P3\n# Generated by yuv2ppm\n";
-#endif
+   yuvdata_t data_in;
+   rgbdata_t data_out;
+   const char ppmheader[] = "# Generated by yuv2ppm\n";
+   int (*writefn)(rgbdata_t *data, FILE *outfile);
+
    in = fopen(infile, "rb");
    out = fopen(outfile, "wb");
-   if (!in  ||  !out)  return 0;
+
+   if (!in  ||  !out)
+      return 0;
+
+   if (BINOUTPUT)
+      fprintf(out, "P6\n");
+   else
+      fprintf(out, "P3\n");
+
    fprintf(out, ppmheader);
    fprintf(out, "%i %i\n255\n", IMAGE_W, IMAGE_H);
+
+   if (BINOUTPUT) {
+      writefn = write_raw;
+   } else {
+      writefn = write_ascii;
+   }
+
    for(int i=0; i<IMAGE_W*IMAGE_H/2; i++)
    {
-      // https://www.flir.com/support-center/iis/machine-vision/knowledge-base/understanding-yuv-data-formats/#:~:text=The%20YUV422%20data%20format%20shares,V2%20Y3%20U4%20Y4%20V4%E2%80%A6
-      // U0 Y0 V0 Y1 U2 Y2 V2 Y3
-    #ifdef YUV422
-      fread(&u, 1, 1, in);
-      fread(&y, 1, 1, in);
-      fread(&v, 1, 1, in);
-      fread(&y2, 1, 1, in);
-    // called YUY2 in mplayer, mplayer -demuxer rawvideo -rawvideo w=320:h=240:format=yuy2 out.yuyv
-    #elif defined(YUYV) 
-      fread(&y, 1, 1, in);
-      fread(&u, 1, 1, in);
-      fread(&y2, 1, 1, in);
-      fread(&v, 1, 1, in);
-    #else
-    #error "do not know YUV format"
-    #endif
-      
-      //printf("u:%2x y:%2x v:%2x y2:%2x\n", u, y, v, y2);
-      yuv2rgb(y, u, v, &r, &g, &b);
+      fread(&data_in.raw, sizeof(data_in.raw), 1, in);
 
-	
-#ifdef BINOUTPUT
-      fwrite(&r, 1, 1, out);
-      fwrite(&g, 1, 1, out);
-      fwrite(&b, 1, 1, out);
-#else
-      fprintf(out, "%u %u %u\n", r, g, b);
-#endif
-      
-#ifdef BINOUTPUT
-      yuv2rgb(y2, u, v, &r, &g, &b);
-      fwrite(&r, 1, 1, out);
-      fwrite(&g, 1, 1, out);
-      fwrite(&b, 1, 1, out);
-#else
-      fprintf(out, "%i %i %i\n", r, g, b);
-#endif
-	 
+      if (FORMAT == YUV422) {
+         yuv2rgb(data_in.yuv442.y, data_in.yuv442.u, data_in.yuv442.v, &data_out);
+         writefn(&data_out, out);
+         yuv2rgb(data_in.yuv442.y2, data_in.yuv442.u, data_in.yuv442.v, &data_out);
+         writefn(&data_out, out);
+      } else if (FORMAT == YUYV) {
+         yuv2rgb(data_in.yuyv.y, data_in.yuyv.u, data_in.yuyv.v, &data_out);
+         writefn(&data_out, out);
+         yuv2rgb(data_in.yuyv.y2, data_in.yuyv.u, data_in.yuyv.v, &data_out);
+         writefn(&data_out, out);
+      } else {
+         printf("Unknown YUV format\n");
+         exit(-1);
+      }
    }
+
    fclose(in);
    fclose(out);
+
    return 1;
 }
+
+void print_help()
+{
+   printf("Converts yuv images to ppm.\n");
+   printf("Possible options:\n");
+   printf("  -b		Output in binary form (default: false)\n");
+   printf("  -a <1-4>	The algorighm to use (default: %i)\n", ALGO);
+   printf("  -W <width>	Image width in pixel (default: %i)\n", IMAGE_W);
+   printf("  -W <width>	Image width in pixel (default: %i)\n", IMAGE_W);
+   printf("  -f <fmt>	Input YUV format to use (default: %i)\n", FORMAT);
+   printf("		Possible values:\n");
+   printf("		  0: YUV422\n");
+   printf("		  1: YUYV\n");
+   printf("  -v		Be verbose\n");
+   printf("  -h		Print this help\n");
+}
+
 int main(int argc, char **argv)
 {
-  char *infile, outfile[256];
-  int i;
-  int success;
-  
-  for(i=1; i<argc; i++)
-  {
-     success = 0;
-     infile = argv[i];
-     make_outfile(outfile, infile);
-     
-     printf("%s -> %s\n", infile, outfile);
-     fflush(stdout);
-     success = yuv2ppm(infile, outfile);
-     
-     if(success)
-     {
-	printf("Done.\n");
-     }
-     else
-     {
-	printf("Failed.  Aborting.\n");
-	return 1;
-     }
-  }
-  return 0;
+   char *infile, outfile[512];
+   int i, c, success;
+
+   opterr = 0;
+
+   while ((c = getopt(argc, argv, "va:bH:W:h")) != -1) {
+      switch (c) {
+      case 'h':
+         print_help();
+         exit(0);
+         break;
+      case 'b':
+         BINOUTPUT = true;
+         break;
+      case 'v':
+         VERBOSE = true;
+         break;
+      case 'a':
+         ALGO = atoi(optarg);
+         break;
+      case 'H':
+         IMAGE_H = atoi(optarg);
+         break;
+      case 'W':
+         IMAGE_W = atoi(optarg);
+         break;
+      case '?':
+         if (optopt == 'W' || optopt == 'H')
+            fprintf(stderr, "Option -%c requires an argument.\n", optopt);
+         else if (isprint(optopt))
+            fprintf(stderr, "Unknown option `-%c'.\n", optopt);
+         else
+            fprintf(stderr,
+                     "Unknown option character `\\x%x'.\n",
+                     optopt);
+         return 1;
+      default:
+         exit(0);
+      }
+   }
+
+
+   for(i=optind; i<argc; i++)
+   {
+      success = 0;
+      infile = argv[i];
+
+      if (strnlen(infile, sizeof(outfile)) > sizeof(outfile)-5) {
+         fprintf(stderr, "Error: Input filename too long: %s\n", infile);
+         exit(-1);
+      }
+
+      make_outfile(outfile, infile);
+
+      printf("%s -> %s\n", infile, outfile);
+      fflush(stdout);
+      success = yuv2ppm(infile, outfile);
+
+      if(success)
+      {
+         printf("Done.\n");
+      }
+      else
+      {
+         printf("Failed.  Aborting.\n");
+         return 1;
+      }
+   }
+   return 0;
 }
