@@ -68,8 +68,8 @@ P3
 bool BINOUTPUT = false;
 bool VERBOSE = false;
 
-uint16_t IMAGE_W = 1920;
-uint16_t IMAGE_H = 1080;
+uint16_t IMAGE_W = 320;
+uint16_t IMAGE_H = 240;
 
 uint8_t ALGO = 5;
 
